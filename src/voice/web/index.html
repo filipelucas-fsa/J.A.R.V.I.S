@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>J.A.R.V.I.S.</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body data-state="idle">
+  <div id="boot">
+    <div class="boot-core"></div>
+    <p>INICIANDO SISTEMAS</p>
+    <ul>
+      <li>MÓDULO DE VOZ ........ OK</li>
+      <li>NÚCLEO DE RACIOCÍNIO . OK</li>
+      <li>PROTOCOLOS DE SEGURANÇA OK</li>
+    </ul>
+  </div>
+
+  <div class="hud">
+    <header>
+      <div id="reactor" class="reactor" aria-hidden="true">
+        <i class="ring r1"></i><i class="ring r2"></i><i class="ring r3"></i><i class="core"></i>
+      </div>
+      <div class="ident">
+        <strong id="title">J.A.R.V.I.S.</strong>
+        <span class="statusline"><span id="dot" class="dot idle"></span><span id="status">Iniciando…</span></span>
+        <small id="model"></small>
+      </div>
+      <div class="tools">
+        <button id="btn-voice" type="button" title="Voz do agente">🔊</button>
+        <button id="btn-mute" type="button" title="Ligar/desligar o microfone">🎙️</button>
+        <button id="btn-new" type="button" title="Nova conversa">↺</button>
+      </div>
+    </header>
+
+    <div id="wave" class="wave" aria-hidden="true">
+      <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+    </div>
+
+    <div id="notice" hidden></div>
+    <main id="messages" aria-live="polite"></main>
+
+    <section id="live" class="card capture" hidden>
+      <div class="card-title">CAPTANDO VOZ</div>
+      <div id="live-text"></div>
+      <div class="row">
+        <span id="ring" class="ring-timer"></span>
+        <span id="countdown"></span>
+        <button id="btn-send" type="button">Enviar agora</button>
+        <button id="btn-cancel" type="button">Cancelar</button>
+      </div>
+    </section>
+
+    <section id="confirm" class="card alert" hidden>
+      <div class="card-title">⚠ AUTORIZAÇÃO NECESSÁRIA</div>
+      <div id="confirm-title"></div>
+      <pre id="confirm-text"></pre>
+      <div class="row">
+        <button id="btn-yes" type="button">Autorizar</button>
+        <button id="btn-always" type="button" hidden>Autorizar sempre nesta sessão</button>
+        <button id="btn-no" type="button">Negar</button>
+      </div>
+    </section>
+
+    <footer>
+      <form id="form" autocomplete="off">
+        <input id="text" type="text" placeholder="Digite um comando…" maxlength="4000">
+        <button type="submit">Enviar</button>
+      </form>
+      <div class="row">
+        <button id="btn-typed" type="button" title="Falar também as respostas aos comandos digitados">Digitado: sem voz</button>
+        <button id="btn-hush" type="button" hidden>⏹ Calar</button>
+        <button id="btn-stop" type="button" hidden>⏹ Parar agente</button>
+      </div>
+    </footer>
+  </div>
+  <script type="module" src="/static/boot.js"></script>
+</body>
+</html>

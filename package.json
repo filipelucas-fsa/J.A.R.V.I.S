@@ -1,0 +1,21 @@
+{
+  "name": "ai-computer-agent",
+  "version": "0.3.0",
+  "description": "Agente de IA experimental: arquivos, terminal e controle do computador com confirmação",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node --env-file=.env src/index.js",
+    "test": "node --test --test-timeout=60000",
+    "models": "node --env-file=.env src/listModels.js",
+    "voice": "node --env-file=.env src/voiceMain.js",
+    "voices": "node --env-file=.env src/listVoices.js"
+  },
+  "engines": {
+    "node": ">=20.6"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.127.0",
+    "pngjs": "^7.0.0"
+  }
+}
