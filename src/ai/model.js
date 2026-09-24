@@ -64,7 +64,8 @@ export function describeApiError(error, { modelName } = {}) {
     if (status === 429) {
       const wait = headerValue(error.headers, "retry-after");
       const waitText = wait ? ` Tente de novo em ${wait}s.` : "";
-      return { message: `Limite de uso/taxa atingido (429).${waitText}${suffix}`, status, type, retryable: true, requestId };
+      const retryAfterMs = /^\d+$/.test(wait ?? "") ? Number(wait) * 1000 : undefined;
+      return { message: `Limite de uso/taxa atingido (429).${waitText}${suffix}`, status, type, retryable: true, requestId, retryAfterMs };
     }
     if (status === 529) {
       return { message: `A API está sobrecarregada (529). Aguarde um pouco e tente de novo.${suffix}`, status, type, retryable: true, requestId };

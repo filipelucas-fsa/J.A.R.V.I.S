@@ -33,6 +33,29 @@ Cuidados com a NVIDIA:
 - Erro **404** costuma significar que o modelo não está habilitado na sua conta (ou o nome está errado).
 - Para o controle de tela (`TOOLS=computer`) o modelo precisa aceitar imagens: `MODEL_VISION=true`.
 
+## Cadeia de modelos (fallback automático)
+
+Opcional: se o modelo principal falhar de forma **temporária** (429 limite de uso, timeout, erro do servidor,
+404 modelo indisponível), o Jarvis tenta automaticamente os modelos reserva configurados em `FALLBACK_MODELS`:
+
+```
+FALLBACK_MODELS=nvidia:meta/llama-3.3-70b-instruct,nvidia:nvidia/nemotron-3-nano-omni-30b-a3b-reasoning[+vision],ollama:llama3.1
+```
+
+- Formato de cada entrada: `provider:modelo` (separadas por vírgula). O primeiro `:` separa o provider — o id do
+  modelo pode conter `/`, como `meta/llama-3.3-70b-instruct`.
+- Tags opcionais entre colchetes: `[+vision]` (aceita imagens), `[-tools]` (não usa ferramentas).
+- Cada provider usa a chave já definida no `.env` (`NVIDIA_API_KEY`, `ANTHROPIC_API_KEY`, …).
+- Reserva do **mesmo provider** do principal usa o mesmo endereço (`MODEL_BASE_URL`) — serve para NIM local/LM Studio.
+- O modelo que falha entra em **cooldown** (descanso de 60 s por padrão, dobra a cada falha seguida): durante o
+  descanso as requisições vão para o próximo; depois ele volta ao topo da preferência. `MODEL_COOLDOWN_SECONDS=0` desliga.
+- Erros de **chave/configuração** (401/402/403, 400 de compatibilidade) **não** trocam de modelo: falham na hora com
+  a mensagem de sempre, para você corrigir o `.env` — trocar de modelo só esconderia o problema.
+- Com `TOOLS=computer`, reservas sem visão ficam desativadas (screenshots no histórico exigem um modelo que "veja").
+- Sem `FALLBACK_MODELS`, o comportamento é exatamente o de antes: um único modelo.
+
+Detalhes técnicos e decisões: `docs/plano-model-manager.md`.
+
 ## Modo voz
 
 `npm run voice` abre uma janelinha (o "painel") e fica escutando.
@@ -69,6 +92,8 @@ naturais. **Privacidade:** nesses navegadores o áudio vai ao serviço de voz do
 | `Modelo ou endereço não encontrado (404)` | `npm run models`; confira `MODEL_NAME` e `MODEL_BASE_URL` (termina em `/v1`). |
 | Erro 400 sobre *tools* | Modelo sem ferramentas: troque de modelo ou `MODEL_TOOLS=false`. |
 | Erro 400 sobre *system role* | `MODEL_SYSTEM_MODE=inline`. |
+| `Limite de uso/taxa atingido (429)` | Com `FALLBACK_MODELS` o Jarvis tenta a reserva sozinho; sem reserva, espere um pouco. |
+| `FALLBACK_MODELS: provider ... desconhecido` | Use um dos providers válidos: anthropic, nvidia, openai, ollama, openai-compatible. |
 | Painel não abre | Instale Chrome/Edge ou defina `VOICE_BROWSER`; ou abra manualmente o endereço impresso no terminal. |
 | "Permissão do microfone negada" | Permita o microfone para o painel nas configurações do navegador. |
 | O agente não fala | Clique uma vez no painel (o navegador bloqueia som antes disso) e confira o botão 🔊. |

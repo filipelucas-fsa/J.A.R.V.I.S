@@ -205,7 +205,11 @@ export function describeHttpError(status, detail, { modelName, provider = "prove
   if (status === 413) return { ...base, retryable: false, message: `Requisição grande demais (413) para ${provider}: imagens ou histórico demais.${suffix}` };
   if (status === 429) {
     const wait = retryAfter ? ` Tente de novo em ${retryAfter}s.` : "";
-    return { ...base, retryable: true, message: `Limite de uso/taxa atingido (429) em ${provider}.${wait}${suffix}` };
+    return {
+      ...base, retryable: true,
+      retryAfterMs: retryAfter !== undefined ? retryAfter * 1000 : undefined,
+      message: `Limite de uso/taxa atingido (429) em ${provider}.${wait}${suffix}`,
+    };
   }
   if (status >= 500) return { ...base, retryable: true, message: `Erro no servidor de ${provider} (${status}): ${detail}. Tente novamente em instantes.${suffix}` };
   return { ...base, retryable: false, message: `Erro de ${provider} (${status}): ${detail}${suffix}` };
@@ -313,7 +317,7 @@ export class OpenAICompatibleModel {
       }
 
       if (!failure.retryable || attempt >= this.maxRetries) {
-        throw new ModelError(failure.message, { status: failure.status, retryable: failure.retryable, requestId: failure.requestId });
+        throw new ModelError(failure.message, { status: failure.status, retryable: failure.retryable, requestId: failure.requestId, retryAfterMs: failure.retryAfterMs });
       }
       await sleep(retryAfterMs ?? Math.min(this.retryBaseMs * 2 ** attempt, MAX_RETRY_WAIT_MS), userSignal);
     }
