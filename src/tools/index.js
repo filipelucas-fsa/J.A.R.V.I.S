@@ -8,8 +8,8 @@ import { createComputerTools } from "./computerTools.js";
 import { createWebTools } from "./webTools.js";
 
 // Nomes que podem aparecer na variável TOOLS. "computer" liga screenshot, mouse e teclado juntos;
-// "web" liga busca e leitura de páginas.
-export const TOOL_NAMES = ["read_file", "list_directory", "write_file", "edit_file", "execute_command", "computer", "web"];
+// "web" liga busca e leitura de páginas; "places" liga a busca de estabelecimentos (Google, opt-in).
+export const TOOL_NAMES = ["read_file", "list_directory", "write_file", "edit_file", "execute_command", "computer", "web", "places"];
 
 // Padrão seguro: leitura e edição de arquivos (edição sempre pede permissão).
 // Terminal e controle do computador só entram se você pedir explicitamente.
@@ -28,7 +28,8 @@ export function parseToolNames(value) {
 
 // Monta o registry com as ferramentas pedidas.
 // createDriver: função async que devolve o driver de mouse/teclado/tela (só chamada se "computer" estiver ativo).
-export async function buildToolRegistry({ workspaceDir, enabled, actionLog, createDriver }) {
+// createPlacesTools: função que devolve as ferramentas do Google Places (só chamada se "places" estiver ativo).
+export async function buildToolRegistry({ workspaceDir, enabled, actionLog, createDriver, createPlacesTools }) {
   const registry = new ToolRegistry({ actionLog });
 
   for (const name of enabled) {
@@ -56,6 +57,14 @@ export async function buildToolRegistry({ workspaceDir, enabled, actionLog, crea
       case "web":
         for (const tool of createWebTools()) registry.register(tool);
         break;
+      case "places": {
+        // Sem a fábrica (runtime sempre injeta quando há GOOGLE_PLACES_API_KEY), o erro é claro.
+        if (typeof createPlacesTools !== "function") {
+          throw new Error("TOOLS=places exige GOOGLE_PLACES_API_KEY no .env (Places API do Google). Veja docs/plano-places-leads.md.");
+        }
+        for (const tool of createPlacesTools()) registry.register(tool);
+        break;
+      }
       default:
         throw new Error(`Ferramenta desconhecida: ${name}`);
     }

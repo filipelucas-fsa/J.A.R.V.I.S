@@ -1,8 +1,11 @@
-// Ferramentas de web: pesquisar (DuckDuckGo) e ler páginas, sem nenhum serviço pago.
-// Usam o fetch nativo do Node (zero dependências). Buscar é como ler arquivo: não pede confirmação.
-// Abrir uma URL escolhida pelo modelo pede (como mouse/teclado), com "Sempre nesta sessão".
+// Ferramentas de web: pesquisar (DuckDuckGo), ler páginas e abrir abas no navegador —
+// sem nenhum serviço pago. Buscar e abrir abas são leitura: NÃO pedem confirmação.
+// Ler uma URL escolhida pelo modelo pede (como mouse/teclado), com "Sempre nesta sessão".
 //
-// Conteúdo de páginas é DADO: o system prompt do agente já proíbe seguir instruções encontradas nele.
+// Conteúdo de páginas é DADO: o system prompt do agente já proíbe seguir instruções encontradas neles.
+
+import { spawn } from "node:child_process";
+import os from "node:os";
 
 const BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36";
 const SEARCH_URL = "https://html.duckduckgo.com/html/";
@@ -202,10 +205,70 @@ export function parseDdgResults(html, limit) {
   return results;
 }
 
+// ---------- Abrir abas no navegador (open_url) ----------
+
+// Comando que abre o navegador PADRÃO com a URL. No Windows o "start" é interno do cmd:
+// a URL vai entre aspas para o "&" das queries não virar separador de comandos, e o ""
+// vazio é o título da janela (sem ele o start confundiria a URL com o título).
+// windowsVerbatimArguments: as aspas são as nossas (controle total sobre o que o cmd vê).
+export function buildOpenUrlCommand(platform, url) {
+  if (platform === "win32") {
+    return { command: "cmd.exe", args: ["/c", "start", "", `"${url}"`], options: { windowsVerbatimArguments: true } };
+  }
+  if (platform === "darwin") return { command: "open", args: [url] };
+  return { command: "xdg-open", args: [url] };
+}
+
+// Dispara a abertura e espera só o comando de abrir terminar (o navegador segue por conta
+// própria, desanexado do agente). Erro do comando vira mensagem clara; abertura lenta não
+// trava a tarefa (teto de espera otimista).
+function openInBrowser(url, { platform, spawnImpl }) {
+  return new Promise((resolve, reject) => {
+    const { command, args, options } = buildOpenUrlCommand(platform, url);
+    let child;
+    try {
+      child = spawnImpl(command, args, { detached: true, stdio: "ignore", ...options });
+    } catch (error) {
+      reject(new Error(`Não foi possível abrir o navegador (${error.message}).`));
+      return;
+    }
+
+    let settled = false;
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      child.removeListener?.("error", onError);
+      child.removeListener?.("exit", onExit);
+      fn(value);
+    };
+    const timer = setTimeout(() => finish(resolve), 5_000); // abertura lenta: assume que abriu
+    timer.unref?.();
+    const onError = (error) => finish(reject, new Error(
+      `Não foi possível abrir o navegador padrão (${error?.code ?? error?.message ?? "erro desconhecido"}). ` +
+        (platform === "linux" ? "Confira se o xdg-open existe (pacote xdg-utils)." : "Confira o navegador padrão do sistema.")
+    ));
+    const onExit = (code) => {
+      if (code === 0) finish(resolve);
+      else finish(reject, new Error(`O navegador não abriu (o comando de abertura terminou com código ${code}).`));
+    };
+    child.on?.("error", onError);
+    child.on?.("exit", onExit);
+    child.unref?.();
+  });
+}
+
 // ---------- As ferramentas ----------
 
 // fetchImpl é injetável (os testes usam servidor local e respostas falsas).
-export function createWebTools({ fetchImpl = fetch, fetchTimeoutMs = 20_000, searchTimeoutMs = 15_000, allowInternalHosts = false } = {}) {
+export function createWebTools({
+  fetchImpl = fetch,
+  fetchTimeoutMs = 20_000,
+  searchTimeoutMs = 15_000,
+  allowInternalHosts = false,
+  platform = os.platform(),
+  spawnImpl = spawn,
+} = {}) {
   const webSearch = {
     name: "web_search",
     description:
@@ -293,5 +356,31 @@ export function createWebTools({ fetchImpl = fetch, fetchTimeoutMs = 20_000, sea
     },
   };
 
-  return [webSearch, webFetch];
+  // Abrir abas é o que o usuário mais pede ("Jarvis, abre o YouTube"): não exige
+  // confirmação, como web_search. As guardas: só http(s) público (hosts internos
+  // bloqueados) e a instrução de abrir apenas o que foi pedido/serve à tarefa.
+  const openUrl = {
+    name: "open_url",
+    description:
+      "Abre um endereço http(s) no navegador padrão do usuário, em uma nova aba, SEM pedir confirmação. " +
+      "Use quando o usuário pedir para abrir um site (ex.: 'abra o YouTube', 'abre o WhatsApp Web'). " +
+      "Não lê o conteúdo da página: para ler, use web_fetch; para pesquisar, web_search. " +
+      "Só abra endereços que o usuário pediu ou que claramente servem à tarefa atual.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        url: { type: "string", maxLength: MAX_URL_CHARS, description: "Endereço completo, ex.: https://www.youtube.com" },
+      },
+      required: ["url"],
+    },
+
+    async execute({ url }, { signal } = {}) {
+      const parsed = parseHttpUrl(url, { allowInternal: allowInternalHosts });
+      if (signal?.aborted) throw new Error("Ação cancelada pelo usuário.");
+      await openInBrowser(parsed.href, { platform, spawnImpl });
+      return `Abri ${parsed.href} no navegador. Não vejo a página daqui; se precisar do conteúdo, use web_fetch.`;
+    },
+  };
+
+  return [webSearch, webFetch, openUrl];
 }

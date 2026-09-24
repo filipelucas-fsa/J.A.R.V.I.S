@@ -13,10 +13,11 @@
 //
 //   // --- opcionais ---
 //   requiresConfirmation: true,    // pede permissão ao usuário antes de executar
-//   allowSessionApproval: true,    // o usuário pode aprovar "todas desta ferramenta nesta sessão"
+//   allowSessionApproval: true,     // o usuário pode aprovar "todas desta ferramenta nesta sessão"
 //   prepare: async (input) => "descrição mostrada ao usuário" // roda ANTES de pedir permissão;
 //                                                             // lance Error para recusar sem incomodar o usuário
 //   redact: ["text"],              // parâmetros que não devem aparecer no log de ações
+//   coerceInput: (input) => input, // limpeza ANTES da validação (ex.: modelos que mandam números como texto)
 // }
 
 const TOOL_NAME_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
@@ -64,6 +65,9 @@ function assertValidTool(tool) {
   }
   if (tool.prepare !== undefined && typeof tool.prepare !== "function") {
     fail(`'prepare' de '${tool.name}' deve ser uma função.`);
+  }
+  if (tool.coerceInput !== undefined && typeof tool.coerceInput !== "function") {
+    fail(`'coerceInput' de '${tool.name}' deve ser uma função.`);
   }
 
   const schema = tool.inputSchema;
@@ -225,6 +229,16 @@ export class ToolRegistry {
       return { ok: false, error };
     }
 
+    // Modelos às vezes mandam números como texto ("130"). A ferramenta pode definir
+    // coerceInput para limpar isso ANTES da validação; o que não der, a validação denuncia.
+    if (typeof tool.coerceInput === "function" && typeof input === "object" && input !== null && !Array.isArray(input)) {
+      try {
+        input = tool.coerceInput(input);
+      } catch {
+        // limpeza com problema: segue com o input original e deixa a validação reclamar
+      }
+    }
+
     const problem = findInputProblem(tool.inputSchema, input);
     if (problem) {
       const error = `Parâmetros inválidos para '${name}': ${problem}.`;
@@ -262,10 +276,12 @@ export class ToolRegistry {
       if (decision === "always" && tool.allowSessionApproval) this.sessionApprovals.add(name);
 
       if (decision !== "yes" && decision !== "always") {
-        const reason = confirm ? "O usuário NEGOU" : "Não há como pedir confirmação ao usuário, então foi NEGADA";
+        const reason = confirm
+          ? "O usuário NEGOU a execução ou a autorização expirou sem resposta"
+          : "Não há como pedir confirmação ao usuário, então foi NEGADA";
         const error =
-          `${reason} a execução de '${name}'. Não repita a mesma ação; ` +
-          `explique o que pretendia fazer ou peça outra abordagem ao usuário.`;
+          `${reason} (${name}). Não repita a mesma ação nem tente por conta própria uma abordagem com efeitos ` +
+          `colaterais maiores (ex.: baixar, instalar, apagar ou enviar algo): explique o que pretendia fazer e espere a orientação do usuário.`;
         this.#record(tool, name, input, "denied", description, startedAt);
         return { ok: false, denied: true, error };
       }

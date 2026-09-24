@@ -6,6 +6,7 @@ import { ActionLog } from "./agent/actionLog.js";
 import { ConfigError, createModelManager, resolveModelChain } from "./ai/index.js";
 import { createNutDriver } from "./computer/nutDriver.js";
 import { buildToolRegistry, parseToolNames } from "./tools/index.js";
+import { createPlacesTools } from "./tools/placesTools.js";
 
 export { ConfigError };
 
@@ -52,7 +53,19 @@ export async function createRuntime({ env = process.env, confirm, log = () => {}
 
   let toolRegistry;
   try {
-    toolRegistry = await buildToolRegistry({ workspaceDir, enabled, actionLog, createDriver });
+    toolRegistry = await buildToolRegistry({
+      workspaceDir,
+      enabled,
+      actionLog,
+      createDriver,
+      // A chave do Google só chega aqui se "places" estiver em TOOLS; sem a chave,
+      // o erro claro aparece na inicialização (nunca no meio de uma tarefa).
+      createPlacesTools: () =>
+        createPlacesTools({
+          apiKey: (env.GOOGLE_PLACES_API_KEY || "").trim(),
+          language: (env.PLACES_LANGUAGE || "").trim() || undefined,
+        }),
+    });
   } catch (error) {
     throw new ConfigError(error.message);
   }

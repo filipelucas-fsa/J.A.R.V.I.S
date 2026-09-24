@@ -172,6 +172,34 @@ test("register rejeita schemas mal definidos (evita erro 400 depois)", () => {
   assert.throws(() => registry.register(withProps("d", { x: { type: "boolean", enum: [true] } })), /enum/);
   assert.throws(() => registry.register(withProps("e", { x: { type: "object" } })), /tipo não suportado/);
   assert.throws(() => registry.register({ ...richTool(), name: "f", prepare: "não é função" }), /prepare/);
+  assert.throws(() => registry.register({ ...richTool(), name: "g", coerceInput: "não é função" }), /coerceInput/);
+});
+
+test("coerceInput: limpeza antes da validação (modelos que mandam números como texto)", async () => {
+  const registry = new ToolRegistry();
+  const executed = [];
+  registry.register({
+    name: "coord",
+    description: "aceita número enviado como texto",
+    coerceInput: (input) => {
+      const out = { ...input };
+      for (const key of ["x", "y"]) {
+        if (typeof out[key] === "string" && Number.isFinite(Number(out[key]))) out[key] = Number(out[key]);
+      }
+      return out;
+    },
+    inputSchema: {
+      type: "object",
+      properties: { x: { type: "number" }, y: { type: "number" } },
+      required: ["x", "y"],
+    },
+    execute: async (input) => (executed.push(input), `(${input.x}, ${input.y})`),
+  });
+
+  assert.equal((await registry.execute("coord", { x: "130", y: "677" })).ok, true, "texto vira número e passa");
+  assert.deepEqual(executed.at(-1), { x: 130, y: 677 }, "a ferramenta recebe o valor limpo");
+  assert.match((await registry.execute("coord", { x: "abc", y: 5 })).error, /deve ser do tipo number/, "o que não vira número, a validação recusa");
+  assert.equal((await registry.execute("coord", { x: 1, y: 2 })).ok, true, "número normal continua igual");
 });
 
 const dangerous = (calls, extra = {}) => ({

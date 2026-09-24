@@ -1,7 +1,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
-import { createWebTools, isInternalHost, parseDdgResults, decodeEntities } from "../src/tools/webTools.js";
+import { buildOpenUrlCommand, createWebTools, isInternalHost, parseDdgResults, decodeEntities } from "../src/tools/webTools.js";
 import { ToolRegistry } from "../src/tools/toolRegistry.js";
 
 // Servidor HTTP local faz o papel de um site de verdade (redirecionamento, tipos, charset, truncamento).
@@ -281,4 +281,86 @@ test("web_search: falha de rede e timeout têm mensagens claras", async () => {
     () => searchTool(webTools({ fetchImpl: hanging, searchTimeoutMs: 150 })).execute({ query: "q" }, {}),
     /Tempo esgotado \(0s\)/,
   );
+});
+
+// ---------- open_url (abrir abas sem confirmação) ----------
+
+const urlTool = (tools) => tools.find((t) => t.name === "open_url");
+
+function fakeChild() {
+  const listeners = new Map();
+  return {
+    on(event, fn) {
+      if (!listeners.has(event)) listeners.set(event, []);
+      listeners.get(event).push(fn);
+    },
+    removeListener(event, fn) {
+      listeners.set(event, (listeners.get(event) ?? []).filter((f) => f !== fn));
+    },
+    unref() {},
+    emit(event, arg) {
+      for (const fn of listeners.get(event) ?? []) fn(arg);
+    },
+  };
+}
+
+test("open_url: NÃO exige confirmação (é como buscar: leitura simples)", () => {
+  assert.ok(!urlTool(createWebTools()).requiresConfirmation);
+});
+
+test("open_url: comando de abertura por sistema (no Windows a URL vai entre aspas contra o '&')", () => {
+  const win = buildOpenUrlCommand("win32", "https://exemplo.com/?a=1&b=2");
+  assert.equal(win.command, "cmd.exe");
+  assert.deepEqual(win.args, ["/c", "start", "", '"https://exemplo.com/?a=1&b=2"']);
+  assert.equal(win.options.windowsVerbatimArguments, true, "aspas controladas por nós: o & não pode virar comando");
+
+  assert.deepEqual(buildOpenUrlCommand("darwin", "https://exemplo.com"), { command: "open", args: ["https://exemplo.com"] });
+  assert.deepEqual(buildOpenUrlCommand("linux", "https://exemplo.com"), { command: "xdg-open", args: ["https://exemplo.com"] });
+  assert.deepEqual(buildOpenUrlCommand("plan9", "https://exemplo.com"), { command: "xdg-open", args: ["https://exemplo.com"] }, "SO desconhecido: xdg-open");
+});
+
+test("open_url: executa SEM confirm e devolve texto; só http(s) público passa", async () => {
+  const spawned = [];
+  const tools = webTools({
+    platform: "linux",
+    spawnImpl: (command, args, options) => {
+      spawned.push({ command, args, options });
+      const child = fakeChild();
+      queueMicrotask(() => child.emit("exit", 0));
+      return child;
+    },
+  });
+  const registry = new ToolRegistry();
+  for (const tool of tools) registry.register(tool);
+
+  const r = await registry.execute("open_url", { url: "https://www.youtube.com" }, {}); // sem confirm
+  assert.equal(r.ok, true, r.error);
+  assert.match(r.output, /Abri https:\/\/www\.youtube\.com\//);
+  assert.equal(spawned[0].command, "xdg-open");
+  assert.deepEqual(spawned[0].args, ["https://www.youtube.com/"]);
+  assert.equal(spawned[0].options.detached, true, "navegador desanexado do agente");
+
+  // hosts internos e protocolos estranhos: bloqueados antes de qualquer spawn (padrão de produção)
+  const bloqueado = createWebTools({ allowInternalHosts: false, spawnImpl: () => { throw new Error("não deveria spawnar"); } });
+  const reg2 = new ToolRegistry();
+  for (const tool of bloqueado) reg2.register(tool);
+  assert.match((await reg2.execute("open_url", { url: "http://192.168.0.1/admin" })).error, /hosts internos/);
+  assert.match((await reg2.execute("open_url", { url: "file:///C:/algo" })).error, /http e https/);
+});
+
+test("open_url: navegador que não abre vira mensagem clara", async () => {
+  const tools = webTools({
+    platform: "linux",
+    spawnImpl: () => {
+      const child = fakeChild();
+      queueMicrotask(() => child.emit("error", { code: "ENOENT" }));
+      return child;
+    },
+  });
+  const registry = new ToolRegistry();
+  for (const tool of tools) registry.register(tool);
+  const r = await registry.execute("open_url", { url: "https://exemplo.com" }, {});
+  assert.equal(r.ok, false);
+  assert.match(r.error, /não foi possível abrir o navegador/i);
+  assert.match(r.error, /xdg-utils/);
 });

@@ -7,6 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createCliConfirm } from "../src/cli/confirm.js";
 import { parseToolNames, buildToolRegistry, DEFAULT_TOOLS, TOOL_NAMES } from "../src/tools/index.js";
+import { createPlacesTools } from "../src/tools/placesTools.js";
 import { createNutDriver } from "../src/computer/nutDriver.js";
 import { startMockApi, callTool, say, apiError } from "./helpers/mockApi.js";
 
@@ -92,13 +93,18 @@ test("buildToolRegistry: só registra o que foi pedido; driver só é criado par
   assert.deepEqual(basic.list().map((t) => t.name), DEFAULT_TOOLS);
   assert.equal(driverCalls, 0);
 
-  const all = await buildToolRegistry({ workspaceDir: "/tmp", enabled: TOOL_NAMES, createDriver });
-  assert.deepEqual(all.list().map((t) => t.name), ["read_file", "list_directory", "write_file", "edit_file", "execute_command", "screenshot", "mouse_move", "mouse_click", "keyboard_type", "keyboard_press", "web_search", "web_fetch"]);
+  const all = await buildToolRegistry({
+    workspaceDir: "/tmp",
+    enabled: TOOL_NAMES,
+    createDriver,
+    createPlacesTools: () => createPlacesTools({ apiKey: "k-teste" }),
+  });
+  assert.deepEqual(all.list().map((t) => t.name), ["read_file", "list_directory", "write_file", "edit_file", "execute_command", "screenshot", "mouse_move", "mouse_click", "keyboard_type", "keyboard_press", "web_search", "web_fetch", "open_url", "find_places"]);
   assert.equal(driverCalls, 1);
 
   const dangerousNames = ["write_file", "edit_file", "execute_command", "screenshot", "mouse_move", "mouse_click", "keyboard_type", "keyboard_press", "web_fetch"];
   for (const name of dangerousNames) assert.equal(all.get(name).requiresConfirmation, true, name);
-  for (const name of ["read_file", "list_directory", "web_search"]) assert.ok(!all.get(name).requiresConfirmation, name);
+  for (const name of ["read_file", "list_directory", "web_search", "open_url", "find_places"]) assert.ok(!all.get(name).requiresConfirmation, name);
 
   await assert.rejects(() => buildToolRegistry({ workspaceDir: "/tmp", enabled: ["computer"], createDriver: async () => { throw new Error("sem tela"); } }), /sem tela/);
 });

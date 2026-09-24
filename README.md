@@ -56,6 +56,29 @@ FALLBACK_MODELS=nvidia:meta/llama-3.3-70b-instruct,nvidia:nvidia/nemotron-3-nano
 
 Detalhes técnicos e decisões: `docs/plano-model-manager.md`.
 
+## Google Places: encontrar estabelecimentos (base para leads)
+
+Opcional e desligado por padrão — o Jarvis funciona 100% sem Google. Para habilitar a
+busca de estabelecimentos (empresas da sua região, possíveis leads):
+
+1. No [Google Cloud](https://console.cloud.google.com): crie/abra um projeto, **ative o faturamento**
+   (exigido mesmo para a franquia gratuita), habilite a **Places API (New)** e gere uma chave de API
+   (recomendado: restrinja a chave a essa API).
+2. No `.env`:
+   ```
+   TOOLS=read_file,list_directory,write_file,edit_file,web,places
+   GOOGLE_PLACES_API_KEY=sua-chave
+   ```
+3. Peça, por voz ou texto: **"Jarvis, encontre barbearias em Feira de Santana e diga quais não têm site"**.
+   O agente usa `find_places`, investiga a presença digital com `web_search`/`web_fetch` e organiza a lista
+   (nome, categoria, endereço, telefone, site, redes sociais).
+
+**Custos** (verificados na documentação do Google, tabela de 2026-09-17): a busca é cobrada **por
+requisição** (não por resultado) — nosso campo de busca inclui telefone/site/avaliação (SKU *Text Search
+Enterprise + Atmosphere*): **1.000 buscas grátis por mês**, depois ~**US$ 0,04 por busca**. Peça vários
+resultados por busca (até 10) em vez de repetir buscas parecidas. Sem chave ou sem `places` em `TOOLS`,
+nada é cobrado e nada muda. Estratégia completa: `docs/plano-places-leads.md`.
+
 ## Modo voz
 
 `npm run voice` abre uma janelinha (o "painel") e fica escutando.
@@ -81,6 +104,8 @@ naturais. **Privacidade:** nesses navegadores o áudio vai ao serviço de voz do
 ## Segurança em resumo
 - Arquivos ficam restritos ao `WORKSPACE_DIR`; `.env`, `.git`, `.ssh` e chaves são bloqueados.
 - Escrever, editar, comandos, tela, mouse e teclado **sempre pedem permissão**; sem como perguntar, a ação é **negada**.
+- Buscar na web e **abrir abas** não pedem permissão (o endereço é validado: só http(s) público).
+- Ler uma página (`web_fetch`) pede permissão, com "Sempre nesta sessão".
 - Comandos de terminal **não** ficam restritos ao workspace: leia o comando antes de autorizar.
 - O painel de voz só escuta em `127.0.0.1`, exige token secreto (impresso no terminal) e recusa outros sites.
 - Log de tudo que o agente tenta fazer: `~/.ai-computer-agent/actions.jsonl` (texto digitado por teclado não é gravado).

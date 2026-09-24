@@ -271,13 +271,10 @@ dependência nova). O `.env` do usuário não precisa mudar; `FALLBACK_MODELS`
 
 ## 12. Próximas fases (roadmap, fora do escopo agora)
 
-1. **Fase 2 — tools**: taxonomia já existente (`web_search`/`web_fetch` grátis;
-   `computer` = navegador real por controle de tela). Só documentação.
-2. **Fase 3 — Google Places/Leads**: camada desacoplada `src/places/` com
-   interface `searchPlaces()` → `GooglePlacesProvider` (Places API New) +
-   tool `find_places` no `TOOLS` (desligada por padrão; Google nunca
-   obrigatório). Análise de presença digital com as tools de web existentes.
-   Custos/limites verificados na documentação oficial na hora de implementar
-   (Places exige faturamento ativo mesmo na franquia gratuita) + teto
-   configurável de requisições.
+1. ~~**Fase 2 — tools**~~: taxonomia já existente (`web_search`/`web_fetch` grátis;
+   `computer` = navegador real por controle de tela). Só documentação. ✔
+2. ~~**Fase 3 — Google Places/Leads**~~: ✔ concluída em 2026-09-23 — ver
+   `docs/plano-places-leads.md` (camada `src/places/` + tool `find_places`, opt-in).
 3. **Fase 4 — multi-agente/multi-sessão**: base pronta (`pick()`, `status()`).
+4. **Futuro**: qualificação de leads persistente (lista/arquivo), cache de buscas do
+   Places, paginação (`pageToken`), provedores alternativos (ex.: OpenStreetMap).

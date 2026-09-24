@@ -147,14 +147,42 @@ test("coordenadas fora da imagem, negativas ou inválidas são recusadas sem inc
     const r = await run("mouse_click", input);
     assert.equal(r.ok, false);
     assert.match(r.error, /fora da imagem/);
+    assert.match(r.error, new RegExp(`entre 0 e ${width - 1}`), "mensagem ensina a faixa válida");
   }
   assert.match((await run("mouse_click", { x: -1, y: 5 })).error, />= 0/);
-  assert.match((await run("mouse_click", { x: 1.5, y: 5 })).error, /integer/);
-  assert.match((await run("mouse_click", { x: "10", y: 5 })).error, /integer/);
+  assert.match((await run("mouse_click", { x: "abc", y: 5 })).error, /deve ser do tipo number/);
   assert.match((await run("mouse_click", { x: 5, y: 5, button: "esquerdo" })).error, /um dos valores: left, right, middle/);
   assert.match((await run("mouse_click", { x: 5 })).error, /'y' é obrigatório/);
   assert.equal(asks.length, before);
   assert.equal(driver.calls.length, 0);
+});
+
+test("coordenadas como texto (\"130\") e frações da tela (0–1) funcionam (erro real do log de uso)", async () => {
+  // episódio registrado em actions.jsonl: o modelo mandou {"x":"0.1293","y":"0.6769"} (texto!)
+  const { run, driver } = setup({ screen: { width: 1360, height: 768 }, capture: { width: 1360, height: 768 } });
+  await run("screenshot", {});
+
+  const fracao = await run("mouse_click", { x: "0.1293", y: "0.6769" });
+  assert.equal(fracao.ok, true, fracao.error);
+  const click = driver.calls.at(-1)[1];
+  assert.ok(Math.abs(click.x - 176) <= 1 && Math.abs(click.y - 520) <= 1, `0.13/0.68 de 1360x768 -> (${click.x},${click.y})`);
+
+  const texto = await run("mouse_click", { x: "130", y: 677 });
+  assert.equal(texto.ok, true, texto.error);
+  assert.equal(driver.calls.at(-1)[1].x, 130);
+
+  const numeroQuebrado = await run("mouse_move", { x: 130.5, y: 50.4 });
+  assert.equal(numeroQuebrado.ok, true, numeroQuebrado.error);
+  assert.deepEqual(driver.calls.at(-1).slice(1), [131, 50], "quebrados viram pixel arredondado");
+});
+
+test("frações da tela escalam para o pixel equivalente (inclusive HiDPI)", async () => {
+  const { run, driver } = setup({ screen: { width: 1920, height: 1080 }, capture: { width: 3840, height: 2160 } });
+  await run("screenshot", {});
+  const r = await run("mouse_click", { x: 0.5, y: 0.5 });
+  assert.equal(r.ok, true, r.error);
+  const click = driver.calls.at(-1)[1];
+  assert.ok(Math.abs(click.x - 960) <= 2 && Math.abs(click.y - 540) <= 2, `centro -> (${click.x},${click.y})`);
 });
 
 test("se a resolução mudou desde o screenshot, o clique é recusado", async () => {
