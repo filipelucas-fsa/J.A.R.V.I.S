@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { Agent } from "../src/agent/agent.js";
+import { Agent, buildSystemPrompt } from "../src/agent/agent.js";
 import { Model } from "../src/ai/model.js";
 import { ToolRegistry } from "../src/tools/toolRegistry.js";
 import { createReadFileTool } from "../src/tools/readFile.js";
@@ -161,6 +161,27 @@ test("agente + read_file: tentativa de sair do workspace chega ao modelo como er
   assert.equal(result.is_error, true);
   assert.match(result.content, /fora do diretório de trabalho/);
   assert.ok(!JSON.stringify(model.calls).includes("SEGREDO"));
+});
+
+test("prompt do sistema informa o sistema operacional com o comando certo para abrir sites", () => {
+  const windows = buildSystemPrompt("win32");
+  assert.match(windows, /Windows/);
+  assert.match(windows, /start chrome https:\/\/exemplo\.com/);
+  assert.match(windows, /'google-chrome'.*não existem aqui/); // os comandos de outro sistema aparecem só para serem negados
+  assert.match(buildSystemPrompt("darwin"), /open -a "Google Chrome"/);
+  assert.match(buildSystemPrompt("linux"), /google-chrome https:\/\/exemplo\.com/);
+  assert.ok(!/start chrome|open -a/.test(buildSystemPrompt("linux")));
+  const unknown = buildSystemPrompt("plan9");
+  assert.ok(!/start chrome|google-chrome|open -a/.test(unknown)); // SO desconhecido: sem dica, sem chute
+  assert.equal(buildSystemPrompt(), buildSystemPrompt(os.platform())); // padrão: o sistema desta máquina
+});
+
+test("agente envia ao modelo o prompt com o sistema operacional informado", async () => {
+  const model = fakeModel([answer("ok")]);
+  const agent = new Agent({ model, toolRegistry: mockRegistry(), platform: "linux" });
+  await agent.run("oi");
+  assert.match(model.calls[0].options.system, /google-chrome/);
+  assert.doesNotMatch(model.calls[0].options.system, /start chrome/);
 });
 
 // ---- Model (com o cliente da API substituído por um stub) ----

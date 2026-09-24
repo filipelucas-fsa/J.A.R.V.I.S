@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
+import os from "node:os";
 
 const MAX_OUTPUT_CHARS = 20_000;
 const DEFAULT_TIMEOUT_SECONDS = 30;
@@ -102,13 +103,17 @@ function runCommand(command, { cwd, timeoutMs, signal }) {
   });
 }
 
+// Como o terminal se chama em cada sistema, para o modelo não chutar comandos de outra plataforma.
+const TERMINAL_NAMES = { win32: "Windows (cmd.exe)", darwin: "macOS (zsh)", linux: "Linux (bash)" };
+
 // Executa um comando no terminal, com a pasta do workspace como diretório inicial.
 // ATENÇÃO: o workspace vale para as ferramentas de ARQUIVO; um comando de terminal NÃO fica confinado a ele.
-export function createExecuteCommandTool({ workspaceDir }) {
+export function createExecuteCommandTool({ workspaceDir, platform = os.platform() }) {
   return {
     name: "execute_command",
     description:
-      "Executa um comando no terminal, começando na pasta do diretório de trabalho. Tem tempo limite e a saída é truncada. " +
+      `Executa um comando no terminal ${TERMINAL_NAMES[platform] ?? platform}, começando na pasta do diretório de trabalho. ` +
+      "Tem tempo limite e a saída é truncada. Use apenas comandos que existem neste sistema operacional. " +
       "Não use para comandos interativos. O usuário precisa aprovar cada comando.",
     requiresConfirmation: true,
     inputSchema: {

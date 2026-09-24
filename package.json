@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.127.0",
+    "@nut-tree-fork/nut-js": "^4.2.6",
     "pngjs": "^7.0.0"
   }
 }

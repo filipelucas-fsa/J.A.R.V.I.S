@@ -93,12 +93,12 @@ test("buildToolRegistry: só registra o que foi pedido; driver só é criado par
   assert.equal(driverCalls, 0);
 
   const all = await buildToolRegistry({ workspaceDir: "/tmp", enabled: TOOL_NAMES, createDriver });
-  assert.deepEqual(all.list().map((t) => t.name), ["read_file", "list_directory", "write_file", "edit_file", "execute_command", "screenshot", "mouse_move", "mouse_click", "keyboard_type", "keyboard_press"]);
+  assert.deepEqual(all.list().map((t) => t.name), ["read_file", "list_directory", "write_file", "edit_file", "execute_command", "screenshot", "mouse_move", "mouse_click", "keyboard_type", "keyboard_press", "web_search", "web_fetch"]);
   assert.equal(driverCalls, 1);
 
-  const dangerousNames = ["write_file", "edit_file", "execute_command", "screenshot", "mouse_move", "mouse_click", "keyboard_type", "keyboard_press"];
+  const dangerousNames = ["write_file", "edit_file", "execute_command", "screenshot", "mouse_move", "mouse_click", "keyboard_type", "keyboard_press", "web_fetch"];
   for (const name of dangerousNames) assert.equal(all.get(name).requiresConfirmation, true, name);
-  for (const name of ["read_file", "list_directory"]) assert.ok(!all.get(name).requiresConfirmation, name);
+  for (const name of ["read_file", "list_directory", "web_search"]) assert.ok(!all.get(name).requiresConfirmation, name);
 
   await assert.rejects(() => buildToolRegistry({ workspaceDir: "/tmp", enabled: ["computer"], createDriver: async () => { throw new Error("sem tela"); } }), /sem tela/);
 });
@@ -202,6 +202,9 @@ test("programa: tarefa lida da entrada padrão", async () => {
 test("programa: configurações inválidas terminam com código 1 e mensagem clara, sem chamar a API", async () => {
   const f = await cliFixture([say("nunca")]);
   try {
+    // 'computer' só é inválido quando o driver real não pode carregar (biblioteca ausente / sem ambiente gráfico).
+    let nutInstalled = true;
+    try { import.meta.resolve("@nut-tree-fork/nut-js"); } catch { nutInstalled = false; }
     const cases = [
       [{ ANTHROPIC_API_KEY: "" }, /ANTHROPIC_API_KEY/],
       [{ TOOLS: "read_file,mouse" }, /Ferramenta desconhecida.*mouse/],
@@ -210,8 +213,8 @@ test("programa: configurações inválidas terminam com código 1 e mensagem cla
       [{ MAX_STEPS: "1.5" }, /MAX_STEPS/],
       [{ WORKSPACE_DIR: "/caminho/que/nao/existe" }, /WORKSPACE_DIR inválido/],
       [{ WORKSPACE_DIR: path.join(f.dir, "package.json") }, /WORKSPACE_DIR inválido/],
-      [{ TOOLS: "computer" }, /ambiente gráfico|nut-js/],
     ];
+    if (!nutInstalled) cases.push([{ TOOLS: "computer" }, /ambiente gráfico|nut-js/]);
     for (const [override, pattern] of cases) {
       const r = await runCli({ env: { ...f.env, ...override } });
       assert.equal(r.code, 1, JSON.stringify(override));

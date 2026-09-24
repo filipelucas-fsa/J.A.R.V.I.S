@@ -51,4 +51,6 @@ createPanel({
   playBeep,
   focusWindow: () => { try { w.focus(); } catch { /* ignora */ } },
   storage,
+  // Diagnóstico de voz no DevTools (Ctrl+Shift+I): tudo que o microfone ouve e o ciclo de vida da escuta.
+  debug: (...args) => console.debug("[voz]", ...args),
 }).start();

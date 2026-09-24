@@ -49,7 +49,7 @@ async function mount({ config = CONFIG, speech = true, route, synth = new FakeSy
 
 test("todos os ids que o painel usa existem no index.html (o DOM falso vem do HTML real)", async () => {
   const { el } = await mount();
-  for (const id of ["dot", "status", "notice", "messages", "live", "live-text", "countdown", "btn-send", "btn-cancel", "confirm", "confirm-title", "confirm-text", "btn-yes", "btn-always", "btn-no", "form", "text", "btn-stop", "btn-mute"]) {
+  for (const id of ["dot", "status", "notice", "messages", "heard", "live", "live-text", "countdown", "btn-send", "btn-cancel", "confirm", "confirm-title", "confirm-text", "btn-yes", "btn-always", "btn-no", "form", "text", "btn-stop", "btn-mute"]) {
     assert.ok(el[id], `falta #${id} no index.html`);
   }
   assert.equal(el.live.hidden, true);
@@ -95,6 +95,28 @@ test("FLUXO PRINCIPAL: fala a palavra-chave, o mini chat transcreve e envia apó
   assert.equal(el.status.textContent, "Pensando…");
   assert.equal(el["btn-stop"].hidden, false);
   assert.equal(clock.pending, 0); // nenhum temporizador ficou pendurado depois do envio
+});
+
+test("'ouvi': em idle mostra o texto bruto ouvido (mesmo sem palavra-chave) e some sozinho", async () => {
+  const { el, say, clock } = await mount();
+  say("Jarbas ligue as luzes"); // transcrição errada: a palavra-chave não casa…
+  assert.equal(el.live.hidden, true); // …mas dá para VER o que o navegador entendeu
+  assert.equal(el.heard.hidden, false);
+  assert.equal(el.heard.textContent, 'ouvi: "Jarbas ligue as luzes"');
+  clock.advance(4_000);
+  assert.equal(el.heard.hidden, true); // apaga sozinho
+});
+
+test("'ouvi': fala nova renova a linha; ela some 4 s depois da ÚLTIMA", async () => {
+  const { el, say, clock } = await mount();
+  say("bom dia");
+  clock.advance(3_000);
+  say("tudo bem aí");
+  assert.equal(el.heard.textContent, 'ouvi: "tudo bem aí"');
+  clock.advance(3_500); // 6,5 s desde a primeira, 3,5 s desde a segunda
+  assert.equal(el.heard.hidden, false);
+  clock.advance(500);
+  assert.equal(el.heard.hidden, true);
 });
 
 test("resposta do agente aparece no chat e o painel volta a escutar", async () => {
@@ -508,6 +530,17 @@ test("ECO: o que o agente fala e o microfone ouve NÃO o interrompe nem aciona a
   assert.equal(t.synth.canceled, canceledBefore); // não interrompeu
   assert.equal(t.el.live.hidden, true); // não abriu captura
   assert.equal(t.el.dot.className, "dot speaking");
+});
+
+test("'ouvi (ignorado)': o eco do agente aparece marcado na linha, sem parecer a sua fala", async () => {
+  const t = await mount();
+  await askByVoice(t);
+  t.source.emit("answer", { text: "Diga Jarvis quando precisar." });
+  await flush();
+  t.next("Diga Jarvis quando precisar"); // o microfone captou a própria fala do agente
+  assert.equal(t.el.heard.hidden, false);
+  assert.match(t.el.heard.textContent, /ouvi \(ignorado\): "Diga Jarvis quando precisar"/);
+  assert.equal(t.el.live.hidden, true);
 });
 
 test("eco: depois que o agente termina de falar, o eco residual também é ignorado e a escuta reinicia", async () => {

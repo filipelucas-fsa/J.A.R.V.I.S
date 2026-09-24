@@ -6,7 +6,7 @@
 // então reiniciamos (com espera crescente se ficar reiniciando rápido demais).
 export function createBrowserRecognizer({
   SpeechRecognitionCtor, lang = "pt-BR", onResults, onSessionEnd, onFatal, onNotice = () => {},
-  setTimer = (fn, ms) => setTimeout(fn, ms), clearTimer = (id) => clearTimeout(id), now = () => Date.now(),
+  setTimer = (fn, ms) => setTimeout(fn, ms), clearTimer = (id) => clearTimeout(id), now = () => Date.now(), debug = () => {},
 }) {
   let recognition = null;
   let wanted = false;
@@ -25,9 +25,13 @@ export function createBrowserRecognizer({
     current.maxAlternatives = 1;
 
     current.onresult = (event) => {
-      onResults(Array.from(event.results, (result) => ({ text: result[0]?.transcript ?? "", isFinal: Boolean(result.isFinal) })));
+      const results = Array.from(event.results, (result) => ({ text: result[0]?.transcript ?? "", isFinal: Boolean(result.isFinal) }));
+      const last = results.at(-1);
+      debug(`ouvi "${last?.text ?? ""}"${last?.isFinal ? " (final)" : ""}`);
+      onResults(results);
     };
     current.onerror = (event) => {
+      debug(`erro do reconhecimento: ${event.error}`); // inclusive "no-speech"/"aborted", normais mas úteis no DevTools
       switch (event.error) {
         case "not-allowed":
         case "service-not-allowed":
@@ -55,12 +59,14 @@ export function createBrowserRecognizer({
       if (!wanted) return;
       shortSessions = now() - startedAt < 1000 ? shortSessions + 1 : 0;
       const delay = Math.min(300 * 2 ** Math.min(shortSessions, 4), 5000);
+      debug(`sessão encerrada pelo navegador; reiniciando em ${delay}ms`);
       restartTimer = setTimer(begin, delay);
     };
 
     startedAt = now();
     try {
       current.start();
+      debug(`escuta iniciada (idioma ${lang})`);
     } catch (error) {
       recognition = null;
       if (!/already started/i.test(String(error?.message))) {

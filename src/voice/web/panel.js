@@ -8,6 +8,7 @@ import { renderMarkdown } from "./markdown.js";
 const MAX_MESSAGES = 200;
 const MAX_LOG_CHARS = 300;
 const ECHO_GUARD_MS = 800; // logo depois que o agente cala, o microfone ainda pode captar o final da fala dele
+const HEARD_HIDE_MS = 4_000; // por quanto tempo a linha "ouvi" continua na tela após a última fala
 const KEY_VOICE = "jarvis.voice";
 const KEY_TYPED = "jarvis.typed";
 
@@ -18,11 +19,12 @@ export function createPanel(deps) {
   const {
     document: doc, fetch, EventSource, SpeechRecognitionCtor, speechSynthesis, SpeechSynthesisUtterance, AudioCtor, URLApi,
     setTimer, clearTimer, setTicker, clearTicker, now = () => Date.now(), playBeep = () => {}, focusWindow = () => {}, storage = null,
+    debug = () => {},
   } = deps;
 
   const $ = (id) => doc.getElementById(id);
   const el = {
-    boot: $("boot"), title: $("title"), model: $("model"), dot: $("dot"), status: $("status"), notice: $("notice"), messages: $("messages"),
+    boot: $("boot"), title: $("title"), model: $("model"), dot: $("dot"), status: $("status"), notice: $("notice"), messages: $("messages"), heard: $("heard"),
     live: $("live"), liveText: $("live-text"), ring: $("ring"), countdown: $("countdown"), btnSend: $("btn-send"), btnCancel: $("btn-cancel"),
     confirm: $("confirm"), confirmTitle: $("confirm-title"), confirmText: $("confirm-text"),
     btnYes: $("btn-yes"), btnAlways: $("btn-always"), btnNo: $("btn-no"),
@@ -48,6 +50,7 @@ export function createPanel(deps) {
   let pendingConfirmId = null;
   let tickerId = null;
   let deadline = 0;
+  let heardTimer = null;
   let taskByVoice = false;
   let voiceEnabled = store.get(KEY_VOICE) !== "off";
   let speakTyped = store.get(KEY_TYPED) === "on";
@@ -124,25 +127,39 @@ export function createPanel(deps) {
     refreshStatus();
   }
 
+  // Mostra o que foi ouvido mesmo sem palavra-chave: confirma que a captura está viva e revela erros de
+  // transcrição (o painel só reage ao texto exato; sem esta linha, "ouviu mas não entendeu" é invisível).
+  function showHeard(text, ignored) {
+    const clean = String(text ?? "").trim();
+    if (clean === "") return;
+    el.heard.textContent = `ouvi${ignored ? " (ignorado)" : ""}: "${clean}"`;
+    el.heard.hidden = false;
+    if (heardTimer !== null) clearTimer(heardTimer);
+    heardTimer = setTimer(() => { heardTimer = null; el.heard.hidden = true; }, HEARD_HIDE_MS);
+  }
+
   // Filtra o que o microfone ouve enquanto o agente fala: o eco dele mesmo não pode nem acionar a palavra-chave
   // nem interromper a fala; já a SUA voz interrompe (conforme VOICE_BARGE_IN).
   function onRecognizerResults(results) {
+    const heard = results.at(-1)?.text ?? "";
     if (output && (output.speaking || now() < echoGuardUntil)) {
-      const heard = results.at(-1)?.text ?? "";
       const reference = output.speaking ? output.currentText : output.lastText;
       if (isEcho(heard, reference)) {
+        showHeard(heard, true);
         controller.handleResults(results, { ignore: true });
         return;
       }
       if (output.speaking) {
         const mode = ttsConfig.bargeIn;
         if (mode === "off" || (mode === "wake" && !findWakeWord(heard, wakeWords, { fuzzy: false }))) {
+          showHeard(heard, true);
           controller.handleResults(results, { ignore: true });
           return;
         }
         output.stop();
       }
     }
+    showHeard(heard, false);
     controller.handleResults(results);
   }
 
@@ -377,7 +394,7 @@ export function createPanel(deps) {
         onResults: onRecognizerResults,
         onSessionEnd: () => controller.handleSessionEnd(),
         onFatal: (message) => { fatal = true; showNotice(message); refreshStatus(); },
-        onNotice: showNotice, setTimer, clearTimer, now,
+        onNotice: showNotice, setTimer, clearTimer, now, debug,
       });
       recognizer.start();
     } else {

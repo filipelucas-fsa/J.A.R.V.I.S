@@ -163,3 +163,17 @@ test("workspace inexistente gera erro claro", async () => {
   assert.equal(r.ok, false);
   assert.match(r.error, /diretório de trabalho/);
 });
+
+test("a descrição informa o sistema operacional do terminal (o modelo não chuta comandos de outra plataforma)", () => {
+  const make = (platform) => {
+    const reg = new ToolRegistry();
+    reg.register(createExecuteCommandTool({ workspaceDir: ws, platform }));
+    return reg.get("execute_command").description;
+  };
+  assert.match(make("win32"), /Windows \(cmd\.exe\)/);
+  assert.match(make("darwin"), /macOS \(zsh\)/);
+  assert.match(make("linux"), /Linux \(bash\)/);
+  assert.match(make("plan9"), /plan9/); // desconhecido: mostra o que recebeu
+  const expected = { win32: "Windows \\(cmd\\.exe\\)", darwin: "macOS \\(zsh\\)", linux: "Linux \\(bash\\)" }[os.platform()] ?? os.platform();
+  assert.match(make(), new RegExp(expected)); // padrão: o sistema desta máquina
+});

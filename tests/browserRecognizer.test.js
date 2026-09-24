@@ -114,6 +114,20 @@ test("erros temporários: 'network' avisa e continua; 'no-speech' e 'aborted' s�
   assert.equal(FakeSpeechRecognition.instances.length, 2);
 });
 
+test("diagnóstico: debug registra o ciclo de vida (início, o que ouviu, erros e reinício)", () => {
+  const lines = [];
+  const { recognizer, clock } = setup({ debug: (line) => lines.push(line) });
+  recognizer.start();
+  FakeSpeechRecognition.last.fire([{ text: "Jarvis", isFinal: false }]);
+  FakeSpeechRecognition.last.fail("aborted");
+  FakeSpeechRecognition.last.finish();
+  clock.advance(600);
+  assert.ok(lines.some((l) => /escuta iniciada/.test(l)), lines.join(" | "));
+  assert.ok(lines.some((l) => /ouvi "Jarvis"/.test(l)), lines.join(" | "));
+  assert.ok(lines.some((l) => /erro do reconhecimento: aborted/.test(l)), lines.join(" | "));
+  assert.ok(lines.some((l) => /reiniciando em \d+ms/.test(l)), lines.join(" | "));
+});
+
 test("start() que lança erro: 'already started' é ignorado; qualquer outro é fatal", () => {
   const original = FakeSpeechRecognition.prototype.start;
   try {

@@ -5,9 +5,11 @@ import { createWriteFileTool } from "./writeFile.js";
 import { createEditFileTool } from "./editFile.js";
 import { createExecuteCommandTool } from "./executeCommand.js";
 import { createComputerTools } from "./computerTools.js";
+import { createWebTools } from "./webTools.js";
 
-// Nomes que podem aparecer na variável TOOLS. "computer" liga screenshot, mouse e teclado juntos.
-export const TOOL_NAMES = ["read_file", "list_directory", "write_file", "edit_file", "execute_command", "computer"];
+// Nomes que podem aparecer na variável TOOLS. "computer" liga screenshot, mouse e teclado juntos;
+// "web" liga busca e leitura de páginas.
+export const TOOL_NAMES = ["read_file", "list_directory", "write_file", "edit_file", "execute_command", "computer", "web"];
 
 // Padrão seguro: leitura e edição de arquivos (edição sempre pede permissão).
 // Terminal e controle do computador só entram se você pedir explicitamente.
@@ -51,6 +53,9 @@ export async function buildToolRegistry({ workspaceDir, enabled, actionLog, crea
         for (const tool of createComputerTools({ driver })) registry.register(tool);
         break;
       }
+      case "web":
+        for (const tool of createWebTools()) registry.register(tool);
+        break;
       default:
         throw new Error(`Ferramenta desconhecida: ${name}`);
     }
